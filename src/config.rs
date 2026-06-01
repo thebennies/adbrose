@@ -65,7 +65,7 @@ fn default_true() -> bool {
 pub fn config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("abdrose")
+        .join("adbrose")
         .join("config.toml")
 }
 

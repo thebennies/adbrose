@@ -203,7 +203,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 fn draw_help(frame: &mut Frame, area: Rect) {
     let text = vec![
         Line::from(Span::styled(
-            " abdrose - Help",
+            " adbrose - Help",
             Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
         )),
         Line::from(""),

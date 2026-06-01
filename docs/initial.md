@@ -1,4 +1,4 @@
-Project name: `abdrose`
+Project name: `adbrose`
 
 Goal:
 Create a cross-platform TUI app, optimized for macOS first, that lets users browse local files and Android `/sdcard` side-by-side, then copy, delete, rename, and sync files using ADB.
@@ -30,11 +30,11 @@ Functional requirements:
 * Default local path: current working directory.
 * Support CLI args:
 
-  * `abdrose`
-  * `abdrose --android-path /sdcard/Download`
-  * `abdrose --local-path ~/Downloads`
-  * `abdrose --serial <serial>`
-  * `abdrose --log-file ~/.abdrose.log`
+  * `adbrose`
+  * `adbrose --android-path /sdcard/Download`
+  * `adbrose --local-path ~/Downloads`
+  * `adbrose --serial <serial>`
+  * `adbrose --log-file ~/.adbrose.log`
 
 2. UI layout
 

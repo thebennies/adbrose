@@ -149,7 +149,7 @@ impl App {
             modal: None,
             input_mode: InputMode::Normal,
             should_quit: false,
-            status_message: "abdrose - press ? for help".into(),
+            status_message: "adbrose - press ? for help".into(),
             filter_buffer: String::new(),
             transfer_queue: TransferQueue::new(),
             config,
