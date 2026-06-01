@@ -1,46 +1,290 @@
-use crate::error::Result;
-use crate::file_entry::{Device, FileEntry};
+use std::process::Command;
+
+use crate::error::{AppError, Result};
+use crate::file_entry::{Device, FileEntry, FileKind};
 
 pub struct AdbClient {
     pub serial: Option<String>,
 }
 
+fn shell_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+fn parse_devices(output: &str) -> Vec<Device> {
+    output
+        .lines()
+        .skip_while(|line| !line.contains("List of devices"))
+        .skip(1)
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() {
+                return None;
+            }
+            let parts: Vec<&str> = line.splitn(2, |c: char| c == '\t' || c == ' ').collect();
+            if parts.len() == 2 {
+                Some(Device {
+                    serial: parts[0].to_string(),
+                    state: parts[1].to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn parse_find_output(output: &str) -> Vec<FileEntry> {
+    output
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() < 3 {
+                return None;
+            }
+            let name = parts[0].to_string();
+            let kind = match parts.get(1).map(|s| s.trim()) {
+                Some("d") => FileKind::Directory,
+                Some("l") => FileKind::Symlink,
+                _ => FileKind::File,
+            };
+            let size = parts.get(2).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+            let modified = parts.get(3).map(|s| s.trim().to_string());
+            Some(FileEntry {
+                name,
+                kind,
+                size,
+                modified,
+            })
+        })
+        .collect()
+}
+
+fn parse_ls_output(output: &str) -> Vec<FileEntry> {
+    output
+        .lines()
+        .filter(|l| !l.is_empty())
+        .filter(|line| line.starts_with('d') || line.starts_with('-') || line.starts_with('l'))
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 7 {
+                return None;
+            }
+            let kind = match line.chars().next() {
+                Some('d') => FileKind::Directory,
+                Some('l') => FileKind::Symlink,
+                _ => FileKind::File,
+            };
+            let size: u64 = parts.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let date_part = parts.get(5).unwrap_or(&"");
+            let time_part = parts.get(6).unwrap_or(&"");
+            let modified = format!("{} {}", date_part, time_part);
+            let name = if parts.len() > 8 {
+                parts[7..].join(" ")
+            } else {
+                parts.get(7).unwrap_or(&"").to_string()
+            };
+            if name == "." || name == ".." {
+                return None;
+            }
+            Some(FileEntry {
+                name,
+                kind,
+                size,
+                modified: Some(modified),
+            })
+        })
+        .collect()
+}
+
 impl AdbClient {
     pub fn new(serial: Option<String>) -> Result<Self> {
+        Self::check_adb_exists()?;
         Ok(Self { serial })
     }
 
+    fn check_adb_exists() -> Result<()> {
+        if let Ok(path) = std::env::var("PATH") {
+            for dir in path.split(':') {
+                let full = std::path::Path::new(dir).join("adb");
+                if full.exists() {
+                    return Ok(());
+                }
+            }
+        }
+        Err(AppError::AdbNotFound)
+    }
+
+    fn base_cmd(&self) -> Command {
+        let mut cmd = Command::new("adb");
+        if let Some(ref serial) = self.serial {
+            cmd.arg("-s").arg(serial);
+        }
+        cmd
+    }
+
+    fn run(&self, args: &[&str]) -> Result<String> {
+        let output = self.base_cmd().args(args).output()?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("unauthorized") {
+                return Err(AppError::Unauthorized);
+            }
+            if stderr.contains("device not found") || stderr.contains("no devices") {
+                return Err(AppError::NoDevice);
+            }
+            return Err(AppError::Adb(stderr.to_string()));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    fn run_shell(&self, args: &[&str]) -> Result<String> {
+        let mut all_args = vec!["shell"];
+        all_args.extend_from_slice(args);
+        self.run(&all_args)
+    }
+
     pub fn device_list(&self) -> Result<Vec<Device>> {
-        Ok(vec![])
+        let output = self.run(&["devices"])?;
+        Ok(parse_devices(&output))
     }
 
     pub fn list_dir(&self, path: &str) -> Result<Vec<FileEntry>> {
-        let _ = path;
-        Ok(vec![])
+        let quoted = shell_quote(path);
+        let find_output = self.run_shell(&[
+            "find", &quoted, "-maxdepth", "1", "-mindepth", "1",
+            "-printf", "%f\\t%y\\t%s\\t%T@\\n",
+        ]);
+
+        match find_output {
+            Ok(out) if !out.trim().is_empty() => {
+                let mut entries = parse_find_output(&out);
+                entries.sort();
+                return Ok(entries);
+            }
+            _ => {}
+        }
+
+        let ls_output = self.run_shell(&["ls", "-la", &quoted])?;
+        let mut entries = parse_ls_output(&ls_output);
+        entries.sort();
+        Ok(entries)
     }
 
     pub fn push(&self, local: &str, remote: &str) -> Result<()> {
-        let _ = (local, remote);
+        let output = self.run(&["push", local, remote])?;
+        if output.contains("error") {
+            return Err(AppError::Adb(output));
+        }
         Ok(())
     }
 
     pub fn pull(&self, remote: &str, local: &str) -> Result<()> {
-        let _ = (remote, local);
+        let output = self.run(&["pull", remote, local])?;
+        if output.contains("error") {
+            return Err(AppError::Adb(output));
+        }
         Ok(())
     }
 
     pub fn mkdir(&self, path: &str) -> Result<()> {
-        let _ = path;
+        let quoted = shell_quote(path);
+        self.run_shell(&["mkdir", "-p", &quoted])?;
         Ok(())
     }
 
     pub fn delete(&self, path: &str, recursive: bool) -> Result<()> {
-        let _ = (path, recursive);
+        let quoted = shell_quote(path);
+        if recursive {
+            self.run_shell(&["rm", "-rf", &quoted])?;
+        } else {
+            self.run_shell(&["rm", "-f", &quoted])?;
+        }
         Ok(())
     }
 
     pub fn rename(&self, from: &str, to: &str) -> Result<()> {
-        let _ = (from, to);
+        let quoted_from = shell_quote(from);
+        let quoted_to = shell_quote(to);
+        self.run_shell(&["mv", &quoted_from, &quoted_to])?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_quote_simple() {
+        assert_eq!(shell_quote("/sdcard"), "'/sdcard'");
+    }
+
+    #[test]
+    fn shell_quote_spaces() {
+        assert_eq!(shell_quote("/sdcard/My Documents"), "'/sdcard/My Documents'");
+    }
+
+    #[test]
+    fn shell_quote_single_quote() {
+        assert_eq!(shell_quote("/sdcard/it's"), "'/sdcard/it'\\''s'");
+    }
+
+    #[test]
+    fn shell_quote_special_chars() {
+        assert_eq!(shell_quote("/sdcard/$foo`bar\"baz\""), "'/sdcard/$foo`bar\"baz\"'");
+    }
+
+    #[test]
+    fn parse_devices_empty() {
+        let devices = parse_devices("");
+        assert!(devices.is_empty());
+    }
+
+    #[test]
+    fn parse_devices_typical() {
+        let output = "List of devices attached\nabc123\tdevice\nxyz789\tunauthorized\n";
+        let devices = parse_devices(output);
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[0].serial, "abc123");
+        assert_eq!(devices[0].state, "device");
+        assert_eq!(devices[1].serial, "xyz789");
+        assert_eq!(devices[1].state, "unauthorized");
+    }
+
+    #[test]
+    fn parse_devices_no_device() {
+        let output = "List of devices attached\n";
+        let devices = parse_devices(output);
+        assert!(devices.is_empty());
+    }
+
+    #[test]
+    fn parse_find_output_basic() {
+        let output = "DCIM\td\t4096\t1700000000\nphoto.jpg\tf\t2048000\t1700000001\n";
+        let entries = parse_find_output(output);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "DCIM");
+        assert!(entries[0].is_dir());
+        assert_eq!(entries[1].name, "photo.jpg");
+        assert_eq!(entries[1].size, 2048000);
+    }
+
+    #[test]
+    fn parse_ls_output_basic() {
+        let output = "drwxrwx--x 4 root sdcard_rw 4096 2024-01-15 10:30 DCIM\n-rw-rw---- 1 root sdcard_rw 2048 2024-01-15 10:30 file.txt\n";
+        let entries = parse_ls_output(output);
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].name, "DCIM");
+        assert!(entries[0].is_dir());
+        assert_eq!(entries[1].name, "file.txt");
+        assert_eq!(entries[1].size, 2048);
+    }
+
+    #[test]
+    fn parse_ls_output_empty() {
+        let entries = parse_ls_output("");
+        assert!(entries.is_empty());
     }
 }
