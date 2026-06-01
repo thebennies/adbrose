@@ -1,4 +1,4 @@
-# adbrowse
+# abdrose
 
 A cross-platform TUI file browser for local and Android filesystems, side-by-side.
 
@@ -27,9 +27,9 @@ Built with Rust, [ratatui](https://ratatui.rs/), and [crossterm](https://github.
 # Install ADB
 brew install android-platform-tools
 
-# Build adbrowse
-git clone <repo-url> adbrowse
-cd adbrowse
+# Build abdrose
+git clone <repo-url> abdrose
+cd abdrose
 cargo build --release
 ```
 
@@ -54,19 +54,19 @@ cargo run
 
 ```bash
 # Default: local cwd ↔ Android /sdcard
-adbrowse
+abdrose
 
 # Custom Android path
-adbrowse --android-path /sdcard/Download
+abdrose --android-path /sdcard/Download
 
 # Custom local path
-adbrowse --local-path ~/Downloads
+abdrose --local-path ~/Downloads
 
 # Select specific device by serial
-adbrowse --serial <device_serial>
+abdrose --serial <device_serial>
 
 # Enable file logging
-adbrowse --log-file ~/.adbrowse.log
+abdrose --log-file ~/.abdrose.log
 ```
 
 ## Keyboard Shortcuts
