@@ -1,6 +1,7 @@
 mod adb;
 mod app;
 mod cli;
+mod config;
 mod error;
 mod file_entry;
 mod input;
@@ -39,20 +40,22 @@ fn main() -> Result<()> {
             .init();
     }
 
+    let config = config::load();
+
     let local_path = cli
         .local_path
-        .as_ref()
-        .map(|p| std::path::PathBuf::from(p))
+        .or(config.defaults.local_path)
+        .map(|p| std::path::PathBuf::from(&p))
         .unwrap_or_else(|| {
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
         });
 
     let android_path = cli
         .android_path
-        .clone()
+        .or(config.defaults.android_path)
         .unwrap_or_else(|| "/sdcard".to_string());
 
-    let serial = cli.serial.clone();
+    let serial = cli.serial.or(config.defaults.serial);
     let adb = match adb::AdbClient::new(serial) {
         Ok(a) => a,
         Err(e) => {
