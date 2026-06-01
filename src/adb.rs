@@ -281,6 +281,38 @@ impl AdbClient {
         }
         Ok(())
     }
+
+    pub async fn tar_pull(
+        &self,
+        remote_dir: &str,
+        local_dir: &str,
+    ) -> Result<()> {
+        let quoted = shell_quote(remote_dir);
+        let mut adb_child = self.base_async_cmd()
+            .args(["exec-out", "tar", "cf", "-", &quoted])
+            .stdout(std::process::Stdio::piped())
+            .spawn()?;
+
+        let adb_stdout = adb_child.stdout.take()
+            .ok_or_else(|| AppError::Adb("failed to capture adb stdout".into()))?;
+
+        let stdin_pipe: std::process::Stdio = adb_stdout
+            .try_into()
+            .map_err(|_| AppError::Adb("failed to convert stdout to stdio".into()))?;
+        let tar_status = tokio::process::Command::new("tar")
+            .args(["xf", "-"])
+            .current_dir(local_dir)
+            .stdin(stdin_pipe)
+            .status()
+            .await?;
+
+        let adb_status = adb_child.wait().await?;
+
+        if !tar_status.success() || !adb_status.success() {
+            return Err(AppError::Adb("tar streaming pull failed".into()));
+        }
+        Ok(())
+    }
 }
 
 fn parse_progress(line: &str) -> Option<u8> {

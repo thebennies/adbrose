@@ -248,21 +248,31 @@ fn spawn_next_transfer(app: &mut App, tx: &mpsc::Sender<AppEvent>) {
         let src = job.source.clone();
         let dst = job.destination.clone();
         let to_android = job.to_android;
+        let is_dir = job.is_dir;
         let adb = app.adb.clone();
+        let use_tar = app.config.transfer.use_tar_streaming;
         let tx = tx.clone();
         app.transfer_queue.mark_started(id);
 
         tokio::spawn(async move {
             let src_str = src.to_str().unwrap_or("").to_string();
             let dst_str = dst.to_str().unwrap_or("").to_string();
-            let tx_progress = tx.clone();
+            let dst_parent = dst.parent()
+                .map(|p| p.to_str().unwrap_or(".").to_string())
+                .unwrap_or_else(|| ".".to_string());
+
+            let tx_done = tx.clone();
             let result = if to_android {
+                let tx_p = tx.clone();
                 adb.push_with_progress(&src_str, &dst_str, move |p| {
-                    let _ = tx_progress.blocking_send(AppEvent::TransferProgress { id, percent: p });
+                    let _ = tx_p.blocking_send(AppEvent::TransferProgress { id, percent: p });
                 }).await
+            } else if is_dir && use_tar {
+                adb.tar_pull(&src_str, &dst_parent).await
             } else {
+                let tx_p = tx.clone();
                 adb.pull_with_progress(&src_str, &dst_str, move |p| {
-                    let _ = tx_progress.blocking_send(AppEvent::TransferProgress { id, percent: p });
+                    let _ = tx_p.blocking_send(AppEvent::TransferProgress { id, percent: p });
                 }).await
             };
 
@@ -270,7 +280,7 @@ fn spawn_next_transfer(app: &mut App, tx: &mpsc::Sender<AppEvent>) {
                 Ok(()) => Ok(()),
                 Err(e) => Err(e.to_string()),
             };
-            let _ = tx.send(AppEvent::TransferDone { id, result: msg }).await;
+            let _ = tx_done.send(AppEvent::TransferDone { id, result: msg }).await;
         });
     }
 }
