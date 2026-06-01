@@ -344,7 +344,8 @@ fn start_copy(app: &mut App) {
 }
 
 fn handle_bookmarks(app: &mut App, key: KeyEvent, cursor: usize) {
-    let names: Vec<String> = app.config.bookmarks.keys().cloned().collect();
+    let mut names: Vec<String> = app.config.bookmarks.keys().cloned().collect();
+    names.sort();
     match key.code {
         KeyCode::Up | KeyCode::Char('k') => {
             let new_cursor = cursor.saturating_sub(1);
