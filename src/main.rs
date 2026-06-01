@@ -1,9 +1,16 @@
+mod adb;
 mod app;
-mod event;
+mod cli;
+mod error;
+mod file_entry;
+mod input;
+mod local_fs;
+mod transfer;
 mod ui;
 
 use std::io;
 
+use anyhow::Result;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -13,36 +20,23 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use app::App;
-use event::{Event, EventHandler};
+use cli::Cli;
+use clap::Parser;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Terminal setup
+fn main() -> Result<()> {
+    let _cli = Cli::parse();
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // App setup
-    let events = EventHandler::new(250);
-    let mut app = App::new("adbrowse");
+    let adb = adb::AdbClient::new(None)?;
+    let app = App::new(adb, std::env::current_dir()?);
 
-    // Main loop
-    loop {
-        terminal.draw(|frame| ui::draw(frame, &app))?;
+    run_app(&mut terminal, app)?;
 
-        match events.next()? {
-            Event::Key(key_event) => {
-                if app.handle_key_event(key_event) {
-                    break;
-                }
-            }
-            Event::Resize(_, _) => {}
-            Event::Tick => {}
-        }
-    }
-
-    // Terminal restore
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -50,6 +44,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
+
+    Ok(())
+}
+
+fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, mut app: App) -> Result<()> {
+    use crossterm::event::{self, Event as CEvent, KeyEventKind};
+    use std::time::Duration;
+
+    loop {
+        terminal.draw(|f| ui::draw(f, &app))?;
+
+        if event::poll(Duration::from_millis(250))? {
+            if let CEvent::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    input::handle(&mut app, key);
+                }
+            }
+        }
+
+        if app.should_quit {
+            break;
+        }
+    }
 
     Ok(())
 }
