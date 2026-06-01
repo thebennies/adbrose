@@ -2,6 +2,11 @@
 
 # adbrose
 
+[![CI](https://github.com/thebennies/adbrose/actions/workflows/ci.yml/badge.svg)](https://github.com/thebennies/adbrose/actions/workflows/ci.yml)
+[![Release](https://github.com/thebennies/adbrose/actions/workflows/release.yml/badge.svg)](https://github.com/thebennies/adbrose/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2026.06.0-blue.svg)](CHANGELOG.md)
+
 A cross-platform, keyboard-driven TUI file browser for local and Android filesystems — side by side.
 
 Built with Rust, [ratatui](https://ratatui.rs/), and [crossterm](https://github.com/crossterm-rs/crossterm). Powered by ADB for all Android access (no MTP).
