@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(name = "adbrose", about = "Dual-pane TUI file browser for local and Android filesystems")]
+#[command(name = "adbrose", version, about = "Dual-pane TUI file browser for local and Android filesystems")]
 pub struct Cli {
     #[arg(long, help = "Starting Android path [default: /sdcard]")]
     pub android_path: Option<String>,
