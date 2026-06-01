@@ -9,6 +9,7 @@ pub enum TransferStatus {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct TransferJob {
     pub id: usize,
     pub source: PathBuf,
@@ -102,6 +103,7 @@ impl TransferQueue {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum TransferUpdate {
     Started(usize),
     Completed(usize),

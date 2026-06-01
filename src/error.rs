@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum AppError {
     #[error("adb not found in PATH – install with: brew install android-platform-tools")]
     AdbNotFound,

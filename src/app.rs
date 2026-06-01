@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+#[allow(unused_imports)]
 use ratatui::widgets::ListState;
 
 use crate::adb::AdbClient;
@@ -165,6 +166,7 @@ impl App {
         }
     }
 
+    #[allow(dead_code)]
     pub fn inactive_pane(&self) -> &PaneState {
         match self.active_pane {
             Pane::Local => &self.android,
