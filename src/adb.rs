@@ -37,33 +37,6 @@ fn parse_devices(output: &str) -> Vec<Device> {
         .collect()
 }
 
-fn parse_find_output(output: &str) -> Vec<FileEntry> {
-    output
-        .lines()
-        .filter(|l| !l.is_empty())
-        .filter_map(|line| {
-            let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() < 3 {
-                return None;
-            }
-            let name = parts[0].to_string();
-            let kind = match parts.get(1).map(|s| s.trim()) {
-                Some("d") => FileKind::Directory,
-                Some("l") => FileKind::Symlink,
-                _ => FileKind::File,
-            };
-            let size = parts.get(2).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
-            let modified = parts.get(3).map(|s| s.trim().to_string());
-            Some(FileEntry {
-                name,
-                kind,
-                size,
-                modified,
-            })
-        })
-        .collect()
-}
-
 fn parse_ls_output(output: &str) -> Vec<FileEntry> {
     output
         .lines()
@@ -83,10 +56,16 @@ fn parse_ls_output(output: &str) -> Vec<FileEntry> {
             let date_part = parts.get(5).unwrap_or(&"");
             let time_part = parts.get(6).unwrap_or(&"");
             let modified = format!("{} {}", date_part, time_part);
-            let name = if parts.len() > 8 {
+            let raw_name = if parts.len() > 8 {
                 parts[7..].join(" ")
             } else {
                 parts.get(7).unwrap_or(&"").to_string()
+            };
+            // Strip symlink target ("name -> target")
+            let name = if kind == FileKind::Symlink {
+                raw_name.split(" -> ").next().unwrap_or(&raw_name).to_string()
+            } else {
+                raw_name
             };
             if name == "." || name == ".." {
                 return None;
@@ -155,20 +134,10 @@ impl AdbClient {
 
     pub fn list_dir(&self, path: &str) -> Result<Vec<FileEntry>> {
         let quoted = shell_quote(path);
-        let find_output = self.run_shell(&[
-            "find", &quoted, "-maxdepth", "1", "-mindepth", "1",
-            "-printf", "%f\\t%y\\t%s\\t%T@\\n",
-        ]);
 
-        match find_output {
-            Ok(out) if !out.trim().is_empty() => {
-                let mut entries = parse_find_output(&out);
-                entries.sort();
-                return Ok(entries);
-            }
-            _ => {}
-        }
-
+        // Use ls -la as the primary method — it works on all Android devices
+        // (toybox/busybox). The previous find -printf approach relied on a GNU
+        // extension not available on Android, causing empty directory listings.
         let ls_output = self.run_shell(&["ls", "-la", &quoted])?;
         let mut entries = parse_ls_output(&ls_output);
         entries.sort();
@@ -377,17 +346,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_find_output_basic() {
-        let output = "DCIM\td\t4096\t1700000000\nphoto.jpg\tf\t2048000\t1700000001\n";
-        let entries = parse_find_output(output);
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].name, "DCIM");
-        assert!(entries[0].is_dir());
-        assert_eq!(entries[1].name, "photo.jpg");
-        assert_eq!(entries[1].size, 2048000);
-    }
-
-    #[test]
     fn parse_ls_output_basic() {
         let output = "drwxrwx--x 4 root sdcard_rw 4096 2024-01-15 10:30 DCIM\n-rw-rw---- 1 root sdcard_rw 2048 2024-01-15 10:30 file.txt\n";
         let entries = parse_ls_output(output);
@@ -411,5 +369,14 @@ mod tests {
     fn parse_ls_output_empty() {
         let entries = parse_ls_output("");
         assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn parse_ls_output_symlink() {
+        let output = "lrwxrwxrwx 1 root root 11 2024-01-15 10:30 sdcard -> /storage/self/primary\n";
+        let entries = parse_ls_output(output);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "sdcard");
+        assert!(matches!(entries[0].kind, FileKind::Symlink));
     }
 }
