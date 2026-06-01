@@ -22,13 +22,20 @@ use crossterm::terminal::{
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use tokio::sync::mpsc;
 use tracing::metadata::LevelFilter;
 
 use app::{App, Modal};
 use cli::Cli;
 use file_entry::Device;
 
-fn main() -> Result<()> {
+enum AppEvent {
+    Key(crossterm::event::KeyEvent),
+    Tick,
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     if let Some(ref log_path) = cli.log_file {
@@ -40,11 +47,11 @@ fn main() -> Result<()> {
             .init();
     }
 
-    let config = config::load();
+    let cfg = config::load();
 
     let local_path = cli
         .local_path
-        .or(config.defaults.local_path)
+        .or(cfg.defaults.local_path.clone())
         .map(|p| std::path::PathBuf::from(&p))
         .unwrap_or_else(|| {
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
@@ -52,10 +59,10 @@ fn main() -> Result<()> {
 
     let android_path = cli
         .android_path
-        .or(config.defaults.android_path)
+        .or(cfg.defaults.android_path.clone())
         .unwrap_or_else(|| "/sdcard".to_string());
 
-    let serial = cli.serial.or(config.defaults.serial);
+    let serial = cli.serial.or(cfg.defaults.serial.clone());
     let adb = match adb::AdbClient::new(serial) {
         Ok(a) => a,
         Err(e) => {
@@ -71,7 +78,7 @@ fn main() -> Result<()> {
 
     set_panic_hook();
 
-    let mut app = App::new(adb, local_path);
+    let mut app = App::new(adb, local_path, cfg);
     app.android.path = std::path::PathBuf::from(android_path);
 
     if app.adb.serial.is_none() {
@@ -111,7 +118,27 @@ fn main() -> Result<()> {
         let _ = load_local_dir(&mut app);
     }
 
-    let result = run_app(&mut terminal, &mut app);
+    let (tx, mut rx) = mpsc::channel(100);
+
+    let event_tx = tx.clone();
+    tokio::task::spawn_blocking(move || {
+        loop {
+            if event::poll(Duration::from_millis(100)).unwrap_or(false) {
+                if let Ok(CEvent::Key(key)) = event::read() {
+                    if key.kind == KeyEventKind::Press {
+                        if event_tx.blocking_send(AppEvent::Key(key)).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            if event_tx.blocking_send(AppEvent::Tick).is_err() {
+                break;
+            }
+        }
+    });
+
+    let result = run_app(&mut terminal, &mut app, &mut rx).await;
 
     disable_raw_mode()?;
     execute!(
@@ -169,18 +196,18 @@ fn set_panic_hook() {
     }));
 }
 
-fn run_app(
+async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
+    rx: &mut mpsc::Receiver<AppEvent>,
 ) -> Result<()> {
     loop {
         terminal.draw(|f| ui::draw(f, app))?;
 
-        if event::poll(Duration::from_millis(250))? {
-            if let CEvent::Key(key) = event::read()? {
-                if key.kind == KeyEventKind::Press {
-                    input::handle(app, key);
-                }
+        if let Some(event) = rx.recv().await {
+            match event {
+                AppEvent::Key(key) => input::handle(app, key),
+                AppEvent::Tick => {}
             }
         }
 

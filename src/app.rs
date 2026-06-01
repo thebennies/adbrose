@@ -134,10 +134,11 @@ pub struct App {
     pub status_message: String,
     pub filter_buffer: String,
     pub transfer_queue: TransferQueue,
+    pub config: crate::config::Config,
 }
 
 impl App {
-    pub fn new(adb: AdbClient, local_path: PathBuf) -> Self {
+    pub fn new(adb: AdbClient, local_path: PathBuf, config: crate::config::Config) -> Self {
         Self {
             active_pane: Pane::Local,
             local: PaneState::new(local_path),
@@ -149,6 +150,7 @@ impl App {
             status_message: "abdrose - press ? for help".into(),
             filter_buffer: String::new(),
             transfer_queue: TransferQueue::new(),
+            config,
         }
     }
 
@@ -301,7 +303,7 @@ mod tests {
     #[test]
     fn active_pane_switches() {
         let adb = crate::adb::AdbClient { serial: None };
-        let mut app = App::new(adb, PathBuf::from("/tmp"));
+        let mut app = App::new(adb, PathBuf::from("/tmp"), crate::config::Config::default());
         assert_eq!(app.active_pane, Pane::Local);
         app.switch_pane();
         assert_eq!(app.active_pane, Pane::Android);
