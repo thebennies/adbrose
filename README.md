@@ -128,12 +128,9 @@ Key abstractions:
 
 ## Roadmap
 
-- [ ] Tar-streaming for faster directory transfers
-- [ ] File preview pane
-- [ ] Configurable keybindings
-- [ ] Bookmarks / favorites
-- [ ] Windows & Linux testing
-- [ ] Progress bars with byte counts
+- [x] Tar-streaming for faster directory transfers
+- [x] Bookmarks / favorites
+- [x] Progress bars with byte counts
 
 ## License
 
