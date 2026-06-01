@@ -258,9 +258,15 @@ impl AdbClient {
         remote_dir: &str,
         local_dir: &str,
     ) -> Result<()> {
-        let quoted = shell_quote(remote_dir);
+        let remote_path = std::path::Path::new(remote_dir);
+        let remote_parent = remote_path.parent().and_then(|p| p.to_str()).unwrap_or(".");
+        let remote_base = remote_path.file_name().and_then(|n| n.to_str()).unwrap_or(remote_dir);
+
+        // Use sh -c so shell_quote works correctly, and cd to the parent so the
+        // tar archive contains just the base folder name (not the full path).
+        let shell_cmd = format!("cd {} && tar cf - {}", shell_quote(remote_parent), shell_quote(remote_base));
         let mut adb_child = self.base_async_cmd()
-            .args(["exec-out", "tar", "cf", "-", &quoted])
+            .args(["exec-out", "sh", "-c", &shell_cmd])
             .stdout(std::process::Stdio::piped())
             .spawn()?;
 
