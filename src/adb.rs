@@ -67,11 +67,9 @@ fn parse_ls_output(output: &str) -> Vec<FileEntry> {
             } else {
                 raw_name
             };
-            if name == "." {
+            if name == "." || name == ".." {
                 return None;
             }
-            // Expose .. as ../ so Enter navigates to the parent folder
-            let name = if name == ".." { "../".into() } else { name };
             Some(FileEntry {
                 name,
                 kind,
@@ -142,6 +140,15 @@ impl AdbClient {
         // extension not available on Android, causing empty directory listings.
         let ls_output = self.run_shell(&["ls", "-la", &quoted])?;
         let mut entries = parse_ls_output(&ls_output);
+
+        // Always add ../ so the user can navigate to the parent folder with Enter
+        entries.push(FileEntry {
+            name: "../".into(),
+            kind: FileKind::Directory,
+            size: 0,
+            modified: None,
+        });
+
         entries.sort();
         Ok(entries)
     }
