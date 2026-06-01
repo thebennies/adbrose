@@ -5,7 +5,7 @@
 [![CI](https://github.com/thebennies/adbrose/actions/workflows/ci.yml/badge.svg)](https://github.com/thebennies/adbrose/actions/workflows/ci.yml)
 [![Release](https://github.com/thebennies/adbrose/actions/workflows/release.yml/badge.svg)](https://github.com/thebennies/adbrose/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2026.06.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2026.06.1-blue.svg)](CHANGELOG.md)
 
 A cross-platform, keyboard-driven TUI file browser for local and Android filesystems — side by side.
 
@@ -47,7 +47,7 @@ All Android access goes through the `adb` command-line tool, which means it work
 - **Tar-streaming** — faster directory pulls via `adb exec-out tar` (enabled by default)
 - **Bookmarks** — save and jump to favorite paths on either pane
 - **Multi-device** — device picker when multiple phones are connected
-- **Filter/search** — quickly narrow down files in the current directory
+- **Filter/search** — quickly narrow down files in the current directory; cursor snaps to matches and arrow keys navigate filtered results
 - **Keyboard-driven** — full vim-style navigation with a help popup (`?`)
 - **Configurable** — TOML config file for defaults, serial, and transfer settings
 
@@ -262,6 +262,11 @@ adbrose --log-file /tmp/adbrose.log
 | **Transfers** | |
 | `t` | View transfer queue |
 | `x` | Cancel active transfer |
+| **Filter Mode** *(active after pressing `/`)* | |
+| `↑` / `↓` / `PgUp` / `PgDn` | Navigate filtered results |
+| `Enter` | Accept filter and return to normal mode |
+| `Esc` | Clear filter and return to normal mode |
+| `Backspace` | Remove last character from filter |
 | **Other** | |
 | `b` | Open bookmarks |
 | `s` | Save current path as bookmark |

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [CalVer](https://calver.org/) (`YYYY.MM.MICRO`).
 
+## 2026.06.1 — 2026-06-01
+
+### Added
+
+- Filter-aware cursor navigation: cursor snaps to first visible match when a filter is applied
+- Arrow keys and PageUp/PageDown work during filter mode to navigate filtered results
+- List highlight now correctly tracks the filtered view position
+- Shows "(no matches)" when a filter matches nothing
+- Unit tests for filter cursor behavior
+
 ## 2026.06.0 — 2026-06-01
 
 ### Added

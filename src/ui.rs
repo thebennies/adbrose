@@ -209,7 +209,7 @@ fn draw_help(frame: &mut Frame, area: Rect) {
             Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
         )),
         Line::from(Span::styled(
-            " version 2026.6.0 ",
+            " version 2026.6.1 ",
             Style::default().fg(Color::DarkGray),
         )),
         Line::from(Span::styled(
