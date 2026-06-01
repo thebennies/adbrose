@@ -85,6 +85,8 @@ adbrowse --log-file ~/.adbrowse.log
 | `d`               | Delete selected (with confirm)  |
 | `r`               | Rename selected                 |
 | `n`               | Create new folder               |
+| `t`               | View transfer queue             |
+| `x`               | Cancel active transfer          |
 | `/`               | Filter / search current pane    |
 | `R`               | Refresh active pane             |
 | `?`               | Help popup                      |
@@ -101,16 +103,15 @@ src/
 ├── input.rs       # Key event handling
 ├── adb.rs         # ADB client abstraction
 ├── local_fs.rs    # Local filesystem operations
-├── file_entry.rs  # FileEntry type
+├── file_entry.rs  # FileEntry / Device types
 ├── transfer.rs    # Async transfer queue
-├── config.rs      # Configuration (serde + TOML)
 └── error.rs       # Error types (anyhow/thiserror)
 ```
 
 Key abstractions:
 
 - **`AdbClient`** — wraps all `adb` shell commands with a clean interface
-- **`LocalFs`** — local filesystem operations via std/tokio APIs
+- **`local_fs`** — local filesystem operations via std APIs (free functions)
 - **`TransferQueue`** — async queue for non-blocking push/pull jobs
 
 ## Troubleshooting
