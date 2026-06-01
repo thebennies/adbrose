@@ -71,6 +71,38 @@ impl PaneState {
             .collect()
     }
 
+    fn filtered_indices(&self) -> Vec<usize> {
+        self.filtered_entries()
+            .into_iter()
+            .map(|(idx, _)| idx)
+            .collect()
+    }
+
+    pub fn filtered_cursor_position(&self) -> Option<usize> {
+        self.filtered_entries()
+            .iter()
+            .position(|(idx, _)| *idx == self.cursor)
+    }
+
+    pub fn set_filter(&mut self, filter: Option<String>) {
+        self.filter = filter;
+        self.snap_cursor_to_visible_entry();
+    }
+
+    fn snap_cursor_to_visible_entry(&mut self) {
+        if self.entries.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+
+        let visible = self.filtered_indices();
+        if visible.is_empty() {
+            self.cursor = self.cursor.min(self.entries.len().saturating_sub(1));
+        } else if !visible.contains(&self.cursor) {
+            self.cursor = visible[0];
+        }
+    }
+
     pub fn current_entry(&self) -> Option<&FileEntry> {
         self.entries.get(self.cursor)
     }
@@ -92,27 +124,62 @@ impl PaneState {
     }
 
     pub fn cursor_down(&mut self) {
-        if !self.entries.is_empty() {
-            self.cursor = (self.cursor + 1).min(self.entries.len() - 1);
+        let visible = self.filtered_indices();
+        if visible.is_empty() {
+            return;
+        }
+
+        if let Some(position) = visible.iter().position(|&idx| idx == self.cursor) {
+            self.cursor = visible[(position + 1).min(visible.len() - 1)];
+        } else {
+            self.cursor = visible[0];
         }
     }
 
     pub fn cursor_up(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
+        let visible = self.filtered_indices();
+        if visible.is_empty() {
+            return;
+        }
+
+        if let Some(position) = visible.iter().position(|&idx| idx == self.cursor) {
+            self.cursor = visible[position.saturating_sub(1)];
+        } else {
+            self.cursor = visible[0];
+        }
     }
 
     pub fn page_down(&mut self) {
         let step = 10;
-        self.cursor = (self.cursor + step).min(self.entries.len().saturating_sub(1));
+        let visible = self.filtered_indices();
+        if visible.is_empty() {
+            return;
+        }
+
+        if let Some(position) = visible.iter().position(|&idx| idx == self.cursor) {
+            self.cursor = visible[(position + step).min(visible.len() - 1)];
+        } else {
+            self.cursor = visible[0];
+        }
     }
 
     pub fn page_up(&mut self) {
-        self.cursor = self.cursor.saturating_sub(10);
+        let step = 10;
+        let visible = self.filtered_indices();
+        if visible.is_empty() {
+            return;
+        }
+
+        if let Some(position) = visible.iter().position(|&idx| idx == self.cursor) {
+            self.cursor = visible[position.saturating_sub(step)];
+        } else {
+            self.cursor = visible[0];
+        }
     }
 
     pub fn set_entries(&mut self, entries: Vec<FileEntry>) {
         self.entries = entries;
-        self.cursor = self.cursor.min(self.entries.len().saturating_sub(1));
+        self.snap_cursor_to_visible_entry();
         self.loading = false;
     }
 

@@ -395,9 +395,13 @@ fn handle_bookmarks(app: &mut App, key: KeyEvent, cursor: usize) {
 
 fn handle_filter(app: &mut App, key: KeyEvent) {
     match key.code {
+        KeyCode::Up => app.active_pane_mut().cursor_up(),
+        KeyCode::Down => app.active_pane_mut().cursor_down(),
+        KeyCode::PageUp => app.active_pane_mut().page_up(),
+        KeyCode::PageDown => app.active_pane_mut().page_down(),
         KeyCode::Esc => {
             app.input_mode = InputMode::Normal;
-            app.active_pane_mut().filter = None;
+            app.active_pane_mut().set_filter(None);
         }
         KeyCode::Enter => {
             app.input_mode = InputMode::Normal;
@@ -409,12 +413,80 @@ fn handle_filter(app: &mut App, key: KeyEvent) {
             } else {
                 Some(app.filter_buffer.clone())
             };
-            app.active_pane_mut().filter = f;
+            app.active_pane_mut().set_filter(f);
         }
         KeyCode::Char(c) => {
             app.filter_buffer.push(c);
-            app.active_pane_mut().filter = Some(app.filter_buffer.clone());
+            let filter = app.filter_buffer.clone();
+            app.active_pane_mut().set_filter(Some(filter));
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::file_entry::{FileEntry, FileKind};
+    use crossterm::event::KeyModifiers;
+    use std::path::PathBuf;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn test_app() -> App {
+        let mut app = App::new(
+            crate::adb::AdbClient { serial: None },
+            PathBuf::from("/tmp"),
+            crate::config::Config::default(),
+        );
+        app.local.entries = vec![
+            FileEntry {
+                name: "dir1".into(),
+                kind: FileKind::Directory,
+                size: 0,
+                modified: None,
+            },
+            FileEntry {
+                name: "file1.txt".into(),
+                kind: FileKind::File,
+                size: 100,
+                modified: None,
+            },
+            FileEntry {
+                name: "file2.txt".into(),
+                kind: FileKind::File,
+                size: 200,
+                modified: None,
+            },
+        ];
+        app
+    }
+
+    #[test]
+    fn applying_filter_moves_cursor_to_first_match() {
+        let mut app = test_app();
+
+        handle(&mut app, key(KeyCode::Char('/')));
+        handle(&mut app, key(KeyCode::Char('f')));
+        handle(&mut app, key(KeyCode::Char('i')));
+        handle(&mut app, key(KeyCode::Char('l')));
+        handle(&mut app, key(KeyCode::Char('e')));
+
+        assert_eq!(app.local.cursor, 1);
+    }
+
+    #[test]
+    fn down_arrow_moves_cursor_to_next_match_while_filtering() {
+        let mut app = test_app();
+        app.input_mode = InputMode::Filter;
+        app.filter_buffer = "file".into();
+        app.local.filter = Some("file".into());
+        app.local.cursor = 1;
+
+        handle(&mut app, key(KeyCode::Down));
+
+        assert_eq!(app.local.cursor, 2);
     }
 }

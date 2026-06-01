@@ -116,7 +116,11 @@ fn draw_pane(
         .highlight_symbol(">> ");
 
     let mut list_state = state.list_state.clone();
-    list_state.select(Some(state.cursor));
+    list_state.select(if state.loading || state.entries.is_empty() {
+        None
+    } else {
+        state.filtered_cursor_position()
+    });
     frame.render_stateful_widget(list, area, &mut list_state);
 }
 
