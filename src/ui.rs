@@ -122,7 +122,12 @@ fn draw_pane(
 
 fn draw_transfer_bar(frame: &mut Frame, app: &App, area: Rect) {
     let text = if let Some(job) = app.transfer_queue.active_job() {
-        format!(" Transferring: {} -> {}", job.source.display(), job.destination.display())
+        let percent = job.progress_percent;
+        let width = area.width.saturating_sub(2) as usize;
+        let filled = (width * percent as usize) / 100;
+        let empty = width - filled;
+        let bar: String = "=".repeat(filled) + "-".repeat(empty).as_str();
+        format!(" [{}] {}% {}", bar, percent, job.source.display())
     } else {
         let completed = app.transfer_queue.jobs.iter().filter(|j| j.status == crate::transfer::TransferStatus::Completed).count();
         let failed = app.transfer_queue.jobs.iter().filter(|j| j.status == crate::transfer::TransferStatus::Failed).count();

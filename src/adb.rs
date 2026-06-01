@@ -1,8 +1,11 @@
 use std::process::Command;
 
+use tokio::process::Command as TokioCommand;
+
 use crate::error::{AppError, Result};
 use crate::file_entry::{Device, FileEntry, FileKind};
 
+#[derive(Clone)]
 pub struct AdbClient {
     pub serial: Option<String>,
 }
@@ -210,6 +213,85 @@ impl AdbClient {
         self.run_shell(&["mv", &quoted_from, &quoted_to])?;
         Ok(())
     }
+
+    fn base_async_cmd(&self) -> TokioCommand {
+        let mut cmd = TokioCommand::new("adb");
+        if let Some(ref serial) = self.serial {
+            cmd.arg("-s").arg(serial);
+        }
+        cmd
+    }
+
+    pub async fn push_with_progress<F: Fn(u8) + Send>(
+        &self,
+        local: &str,
+        remote: &str,
+        on_progress: F,
+    ) -> Result<()> {
+        let mut child = self.base_async_cmd()
+            .args(["push", local, remote])
+            .stderr(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()?;
+
+        if let Some(stderr) = child.stderr.take() {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if let Some(percent) = parse_progress(&line) {
+                    on_progress(percent);
+                }
+            }
+        }
+
+        let status = child.wait().await?;
+        if !status.success() {
+            return Err(AppError::Adb("push failed".into()));
+        }
+        Ok(())
+    }
+
+    pub async fn pull_with_progress<F: Fn(u8) + Send>(
+        &self,
+        remote: &str,
+        local: &str,
+        on_progress: F,
+    ) -> Result<()> {
+        let mut child = self.base_async_cmd()
+            .args(["pull", remote, local])
+            .stderr(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()?;
+
+        if let Some(stderr) = child.stderr.take() {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if let Some(percent) = parse_progress(&line) {
+                    on_progress(percent);
+                }
+            }
+        }
+
+        let status = child.wait().await?;
+        if !status.success() {
+            return Err(AppError::Adb("pull failed".into()));
+        }
+        Ok(())
+    }
+}
+
+fn parse_progress(line: &str) -> Option<u8> {
+    let line = line.trim();
+    if !line.starts_with('[') {
+        return None;
+    }
+    let end = line.find(']')?;
+    let inner = &line[1..end];
+    let num_str = inner.trim().trim_end_matches('%');
+    num_str.parse().ok()
 }
 
 #[cfg(test)]
@@ -280,6 +362,15 @@ mod tests {
         assert!(entries[0].is_dir());
         assert_eq!(entries[1].name, "file.txt");
         assert_eq!(entries[1].size, 2048);
+    }
+
+    #[test]
+    fn parse_progress_line() {
+        assert_eq!(parse_progress("[  0%] /data/local/tmp/file.txt"), Some(0));
+        assert_eq!(parse_progress("[ 47%] /data/local/tmp/file.txt"), Some(47));
+        assert_eq!(parse_progress("[100%] /data/local/tmp/file.txt"), Some(100));
+        assert_eq!(parse_progress("some other output"), None);
+        assert_eq!(parse_progress("[50%]"), Some(50));
     }
 
     #[test]

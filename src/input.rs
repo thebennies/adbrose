@@ -301,47 +301,6 @@ fn start_copy(app: &mut App) {
     }
 
     app.status_message = format!("queued {} transfer(s)", entries.len());
-
-    process_next_transfer(app);
-}
-
-fn process_next_transfer(app: &mut App) {
-    if let Some(job) = app.transfer_queue.next_pending() {
-        let id = job.id;
-        let src = job.source.clone();
-        let dst = job.destination.clone();
-        let to_android = job.to_android;
-        app.transfer_queue.mark_started(id);
-        app.status_message = format!(
-            "transferring {} -> {}",
-            src.display(),
-            dst.display()
-        );
-
-        let result = if to_android {
-            app.adb.push(
-                src.to_str().unwrap_or(""),
-                dst.to_str().unwrap_or(""),
-            )
-        } else {
-            app.adb.pull(
-                src.to_str().unwrap_or(""),
-                dst.to_str().unwrap_or(""),
-            )
-        };
-
-        match result {
-            Ok(()) => {
-                app.transfer_queue.mark_completed(id);
-                app.status_message = format!("transfer complete: {}", src.display());
-                let _ = app.refresh_active_pane();
-            }
-            Err(e) => {
-                app.transfer_queue.mark_failed(id, e.to_string());
-                app.status_message = format!("transfer failed: {}", e);
-            }
-        }
-    }
 }
 
 fn handle_filter(app: &mut App, key: KeyEvent) {

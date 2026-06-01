@@ -17,6 +17,7 @@ pub struct TransferJob {
     pub to_android: bool,
     pub is_dir: bool,
     pub status: TransferStatus,
+    pub progress_percent: u8,
     pub error: Option<String>,
 }
 
@@ -44,6 +45,7 @@ impl TransferQueue {
             to_android,
             is_dir,
             status: TransferStatus::Pending,
+            progress_percent: 0,
             error: None,
         });
         id
@@ -100,12 +102,19 @@ impl TransferQueue {
     pub fn next_pending(&self) -> Option<&TransferJob> {
         self.jobs.iter().find(|j| j.status == TransferStatus::Pending)
     }
+
+    pub fn update_progress(&mut self, id: usize, percent: u8) {
+        if let Some(job) = self.jobs.iter_mut().find(|j| j.id == id) {
+            job.progress_percent = percent;
+        }
+    }
 }
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum TransferUpdate {
     Started(usize),
+    Progress { id: usize, percent: u8 },
     Completed(usize),
     Failed(usize, String),
 }

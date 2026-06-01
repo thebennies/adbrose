@@ -32,6 +32,8 @@ use file_entry::Device;
 enum AppEvent {
     Key(crossterm::event::KeyEvent),
     Tick,
+    TransferProgress { id: usize, percent: u8 },
+    TransferDone { id: usize, result: std::result::Result<(), String> },
 }
 
 #[tokio::main]
@@ -138,7 +140,7 @@ async fn main() -> Result<()> {
         }
     });
 
-    let result = run_app(&mut terminal, &mut app, &mut rx).await;
+    let result = run_app(&mut terminal, &mut app, &mut rx, tx).await;
 
     disable_raw_mode()?;
     execute!(
@@ -200,14 +202,33 @@ async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
     rx: &mut mpsc::Receiver<AppEvent>,
+    tx: mpsc::Sender<AppEvent>,
 ) -> Result<()> {
     loop {
         terminal.draw(|f| ui::draw(f, app))?;
 
         if let Some(event) = rx.recv().await {
             match event {
-                AppEvent::Key(key) => input::handle(app, key),
+                AppEvent::Key(key) => {
+                    input::handle(app, key);
+                    spawn_next_transfer(app, &tx);
+                }
                 AppEvent::Tick => {}
+                AppEvent::TransferProgress { id, percent } => {
+                    app.transfer_queue.update_progress(id, percent);
+                }
+                AppEvent::TransferDone { id, result } => {
+                    match result {
+                        Ok(()) => {
+                            app.transfer_queue.mark_completed(id);
+                            let _ = app.refresh_active_pane();
+                        }
+                        Err(e) => {
+                            app.transfer_queue.mark_failed(id, e);
+                        }
+                    }
+                    spawn_next_transfer(app, &tx);
+                }
             }
         }
 
@@ -216,4 +237,40 @@ async fn run_app(
         }
     }
     Ok(())
+}
+
+fn spawn_next_transfer(app: &mut App, tx: &mpsc::Sender<AppEvent>) {
+    if app.transfer_queue.has_active() {
+        return;
+    }
+    if let Some(job) = app.transfer_queue.next_pending() {
+        let id = job.id;
+        let src = job.source.clone();
+        let dst = job.destination.clone();
+        let to_android = job.to_android;
+        let adb = app.adb.clone();
+        let tx = tx.clone();
+        app.transfer_queue.mark_started(id);
+
+        tokio::spawn(async move {
+            let src_str = src.to_str().unwrap_or("").to_string();
+            let dst_str = dst.to_str().unwrap_or("").to_string();
+            let tx_progress = tx.clone();
+            let result = if to_android {
+                adb.push_with_progress(&src_str, &dst_str, move |p| {
+                    let _ = tx_progress.blocking_send(AppEvent::TransferProgress { id, percent: p });
+                }).await
+            } else {
+                adb.pull_with_progress(&src_str, &dst_str, move |p| {
+                    let _ = tx_progress.blocking_send(AppEvent::TransferProgress { id, percent: p });
+                }).await
+            };
+
+            let msg = match result {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e.to_string()),
+            };
+            let _ = tx.send(AppEvent::TransferDone { id, result: msg }).await;
+        });
+    }
 }
