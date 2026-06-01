@@ -23,6 +23,8 @@ pub enum Modal {
     Rename { buffer: String },
     CreateFolder { buffer: String },
     TransferProgress,
+    Bookmarks { cursor: usize },
+    SaveBookmark { buffer: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

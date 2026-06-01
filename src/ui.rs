@@ -176,6 +176,8 @@ fn draw_modal(frame: &mut Frame, app: &App, modal: &Modal) {
         Modal::Rename { buffer } => draw_rename(frame, area, buffer),
         Modal::CreateFolder { buffer } => draw_create_folder(frame, area, buffer),
         Modal::TransferProgress => draw_transfer_progress(frame, area, app),
+        Modal::Bookmarks { cursor } => draw_bookmarks(frame, area, app, *cursor),
+        Modal::SaveBookmark { buffer } => draw_save_bookmark(frame, area, buffer),
     }
 }
 
@@ -221,6 +223,8 @@ fn draw_help(frame: &mut Frame, area: Rect) {
         Line::from(" R            Refresh pane"),
         Line::from(" t            Show transfer queue"),
         Line::from(" x            Cancel active transfer"),
+        Line::from(" b            Open bookmarks"),
+        Line::from(" s            Save bookmark"),
         Line::from(" ?            This help"),
         Line::from(" q            Quit"),
         Line::from(""),
@@ -364,6 +368,56 @@ fn draw_transfer_progress(frame: &mut Frame, area: Rect, app: &App) {
     )));
     let paragraph = Paragraph::new(text)
         .block(Block::default().borders(Borders::ALL).title(" Transfers "))
+        .style(Style::default().bg(Color::Black));
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_bookmarks(frame: &mut Frame, area: Rect, app: &App, cursor: usize) {
+    let mut text = vec![
+        Line::from(Span::styled(
+            " Bookmarks",
+            Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
+        )),
+        Line::from(""),
+    ];
+    let mut items: Vec<(&String, &String)> = app.config.bookmarks.iter().collect();
+    items.sort_by_key(|(name, _)| name.as_str());
+    for (i, (name, path)) in items.iter().enumerate() {
+        let style = if i == cursor {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        text.push(Line::from(Span::styled(
+            format!(" {} {} -> {}", if i == cursor { ">>" } else { "  " }, name, path),
+            style,
+        )));
+    }
+    text.push(Line::from(""));
+    text.push(Line::from(Span::styled(
+        " Enter: go  D: delete  Esc: close",
+        Style::default().fg(Color::DarkGray),
+    )));
+    let paragraph = Paragraph::new(text)
+        .block(Block::default().borders(Borders::ALL).title(" Bookmarks "))
+        .style(Style::default().bg(Color::Black));
+    frame.render_widget(paragraph, area);
+}
+
+fn draw_save_bookmark(frame: &mut Frame, area: Rect, buffer: &str) {
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled(" Bookmark name:", Style::default().add_modifier(Modifier::BOLD))),
+        Line::from(format!(" {}", buffer)),
+        Line::from("|"),
+        Line::from(""),
+        Line::from(Span::styled(
+            " Enter: save  Esc: cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+    let paragraph = Paragraph::new(text)
+        .block(Block::default().borders(Borders::ALL).title(" Save Bookmark "))
         .style(Style::default().bg(Color::Black));
     frame.render_widget(paragraph, area);
 }

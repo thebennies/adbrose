@@ -34,6 +34,36 @@ fn handle_modal(app: &mut App, key: KeyEvent, modal: &Modal) {
                 let mut buf = buffer.clone();
                 handle_text_input(app, key, &mut buf, false);
             }
+            Modal::Bookmarks { cursor } => {
+                handle_bookmarks(app, key, *cursor);
+            }
+            Modal::SaveBookmark { buffer } => {
+                let mut buf = buffer.clone();
+                match key.code {
+                    KeyCode::Enter => {
+                        let name = buf.clone();
+                        app.modal = None;
+                        if !name.is_empty() {
+                            let path = app.active_pane().path.clone();
+                            app.config.bookmarks.insert(name, path.to_str().unwrap_or("").to_string());
+                            if let Err(e) = crate::config::save(&app.config) {
+                                app.status_message = format!("bookmark saved but config not persisted: {}", e);
+                            } else {
+                                app.status_message = "bookmark saved".into();
+                            }
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        buf.pop();
+                        app.modal = Some(Modal::SaveBookmark { buffer: buf });
+                    }
+                    KeyCode::Char(c) => {
+                        buf.push(c);
+                        app.modal = Some(Modal::SaveBookmark { buffer: buf });
+                    }
+                    _ => {}
+                }
+            }
             Modal::Error { .. } | Modal::Help | Modal::TransferProgress => {}
         },
     }
@@ -223,6 +253,16 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
                 app.status_message = "transfer cancelled".into();
             }
         }
+        KeyCode::Char('b') => {
+            if !app.config.bookmarks.is_empty() {
+                app.modal = Some(Modal::Bookmarks { cursor: 0 });
+            } else {
+                app.status_message = "no bookmarks - press s to save current path".into();
+            }
+        }
+        KeyCode::Char('s') => {
+            app.modal = Some(Modal::SaveBookmark { buffer: String::new() });
+        }
         KeyCode::Char('?') => app.show_help(),
         _ => {}
     }
@@ -301,6 +341,55 @@ fn start_copy(app: &mut App) {
     }
 
     app.status_message = format!("queued {} transfer(s)", entries.len());
+}
+
+fn handle_bookmarks(app: &mut App, key: KeyEvent, cursor: usize) {
+    let names: Vec<String> = app.config.bookmarks.keys().cloned().collect();
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => {
+            let new_cursor = cursor.saturating_sub(1);
+            app.modal = Some(Modal::Bookmarks { cursor: new_cursor });
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            let max = names.len().saturating_sub(1);
+            let new_cursor = (cursor + 1).min(max);
+            app.modal = Some(Modal::Bookmarks { cursor: new_cursor });
+        }
+        KeyCode::Enter => {
+            if let Some(name) = names.get(cursor) {
+                if let Some(path_str) = app.config.bookmarks.get(name) {
+                    let path_str = path_str.clone();
+                    let path = std::path::PathBuf::from(&path_str);
+                    let is_android = path_str.starts_with('/') && !path_str.starts_with("/home") && !path_str.starts_with("/Users") && !path_str.starts_with("/tmp");
+                    if is_android {
+                        app.android.navigate_to(path);
+                        let _ = app.refresh_active_pane();
+                    } else {
+                        app.local.navigate_to(path);
+                        let old_pane = app.active_pane;
+                        app.active_pane = Pane::Local;
+                        let _ = app.refresh_active_pane();
+                        app.active_pane = old_pane;
+                    }
+                    app.modal = None;
+                    app.status_message = format!("navigated to {}", path_str);
+                }
+            }
+        }
+        KeyCode::Char('D') => {
+            if let Some(name) = names.get(cursor).cloned() {
+                app.config.bookmarks.remove(&name);
+                let _ = crate::config::save(&app.config);
+                if app.config.bookmarks.is_empty() {
+                    app.modal = None;
+                } else {
+                    let new_cursor = cursor.min(app.config.bookmarks.len().saturating_sub(1));
+                    app.modal = Some(Modal::Bookmarks { cursor: new_cursor });
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 fn handle_filter(app: &mut App, key: KeyEvent) {

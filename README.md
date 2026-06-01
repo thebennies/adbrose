@@ -87,6 +87,8 @@ abdrose --log-file ~/.abdrose.log
 | `n`               | Create new folder               |
 | `t`               | View transfer queue             |
 | `x`               | Cancel active transfer          |
+| `b`               | Open bookmarks                  |
+| `s`               | Save current path as bookmark   |
 | `/`               | Filter / search current pane    |
 | `R`               | Refresh active pane             |
 | `?`               | Help popup                      |
