@@ -46,7 +46,7 @@ fn draw_pane(
     area: Rect,
 ) {
     let is_active = app.active_pane == pane;
-    let border_color = if is_active { Color::Cyan } else { Color::DarkGray };
+    let border_color = if is_active { Color::Cyan } else { Color::Rgb(55, 55, 55) };
     let label = match pane {
         Pane::Local => "Local",
         Pane::Android => "Android",
@@ -104,7 +104,7 @@ fn draw_pane(
                 .title(title)
                 .title_style(
                     Style::default()
-                        .fg(if is_active { Color::Cyan } else { Color::DarkGray })
+                        .fg(if is_active { Color::Cyan } else { Color::Rgb(55, 55, 55) })
                         .add_modifier(Modifier::BOLD),
                 ),
         )
@@ -205,6 +205,14 @@ fn draw_help(frame: &mut Frame, area: Rect) {
         Line::from(Span::styled(
             " adbrose - Help",
             Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
+        )),
+        Line::from(Span::styled(
+            " version 2026.6.0 ",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(Span::styled(
+            " https://github.com/thebennies/adbrose ",
+            Style::default().fg(Color::DarkGray),
         )),
         Line::from(""),
         Line::from(" Tab          Switch pane"),
