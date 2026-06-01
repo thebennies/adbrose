@@ -7,6 +7,15 @@ use crate::file_entry::{FileEntry, FileKind};
 
 pub fn list_dir(path: &Path) -> Result<Vec<FileEntry>> {
     let mut entries: Vec<FileEntry> = Vec::new();
+
+    // Always add ../ so the user can navigate to the parent folder with Enter
+    entries.push(FileEntry {
+        name: "../".into(),
+        kind: FileKind::Directory,
+        size: 0,
+        modified: None,
+    });
+
     let read_dir = fs::read_dir(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             AppError::NotFound(path.display().to_string())
@@ -96,8 +105,10 @@ mod tests {
         fs::create_dir(dir.path().join("zzz_dir")).unwrap();
 
         let entries = list_dir(dir.path()).unwrap();
-        assert_eq!(entries[0].name, "zzz_dir");
+        assert_eq!(entries[0].name, "../");
         assert!(entries[0].is_dir());
+        assert_eq!(entries[1].name, "zzz_dir");
+        assert!(entries[1].is_dir());
     }
 
     #[test]

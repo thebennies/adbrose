@@ -67,9 +67,11 @@ fn parse_ls_output(output: &str) -> Vec<FileEntry> {
             } else {
                 raw_name
             };
-            if name == "." || name == ".." {
+            if name == "." {
                 return None;
             }
+            // Expose .. as ../ so Enter navigates to the parent folder
+            let name = if name == ".." { "../".into() } else { name };
             Some(FileEntry {
                 name,
                 kind,
