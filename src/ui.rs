@@ -138,9 +138,7 @@ fn draw_transfer_bar(frame: &mut Frame, app: &App, area: Rect) {
         }
     };
 
-    let bar = Paragraph::new(Line::from(text)).style(
-        Style::default().bg(Color::DarkGray).fg(Color::Yellow),
-    );
+    let bar = Paragraph::new(Line::from(text)).style(Style::default().fg(Color::Yellow));
     frame.render_widget(bar, area);
 }
 
@@ -157,8 +155,8 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let line = Line::from(vec![
-        Span::styled(left, Style::default().bg(Color::Blue).fg(Color::White)),
-        Span::styled(right, Style::default().bg(Color::DarkGray).fg(Color::White)),
+        Span::styled(left, Style::default().fg(Color::White)),
+        Span::styled(right, Style::default().fg(Color::White)),
     ]);
     let bar = Paragraph::new(line);
     frame.render_widget(bar, area);
@@ -428,4 +426,45 @@ fn draw_save_bookmark(frame: &mut Frame, area: Rect, buffer: &str) {
         .block(Block::default().borders(Borders::ALL).title(" Save Bookmark "))
         .style(Style::default().bg(Color::Black));
     frame.render_widget(paragraph, area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn test_app() -> App {
+        App::new(
+            crate::adb::AdbClient { serial: None },
+            std::path::PathBuf::from("/tmp"),
+            crate::config::Config::default(),
+        )
+    }
+
+    #[test]
+    fn idle_footer_has_no_background() {
+        let backend = TestBackend::new(80, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let app = test_app();
+
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                draw_transfer_bar(frame, &app, Rect::new(0, 1, area.width, 1));
+                draw_status_bar(frame, &app, Rect::new(0, 2, area.width, 1));
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        for y in 1..=2 {
+            for x in 0..80 {
+                assert_eq!(
+                    buffer[(x, y)].bg,
+                    Color::Reset,
+                    "expected transparent footer background at ({x}, {y})"
+                );
+            }
+        }
+    }
 }
