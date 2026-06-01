@@ -175,6 +175,7 @@ impl AdbClient {
         Ok(entries)
     }
 
+    #[allow(dead_code)]
     pub fn push(&self, local: &str, remote: &str) -> Result<()> {
         let output = self.run(&["push", local, remote])?;
         if output.contains("error") {
@@ -183,6 +184,7 @@ impl AdbClient {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn pull(&self, remote: &str, local: &str) -> Result<()> {
         let output = self.run(&["pull", remote, local])?;
         if output.contains("error") {

@@ -1,10 +1,10 @@
+![screenshot placeholder](docs/hero.jpg)
+
 # adbrose
 
 A cross-platform TUI file browser for local and Android filesystems, side-by-side.
 
 Built with Rust, [ratatui](https://ratatui.rs/), and [crossterm](https://github.com/crossterm-rs/crossterm). Optimized for macOS first.
-
-![screenshot placeholder](docs/screenshot.png)
 
 ## Features
 
